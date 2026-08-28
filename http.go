@@ -78,7 +78,7 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 	}
 	w.WriteHeader(resp.StatusCode)
 
-	if isWebSocketHandshake(resp.Header) {
+	if resp.StatusCode == http.StatusSwitchingProtocols && isWebSocketHandshake(resp.Header) {
 		ctx.Logf("Response looks like websocket upgrade.")
 
 		// We have already written the "101 Switching Protocols" response,
@@ -87,6 +87,7 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 			wsConn, ok := resp.Body.(io.ReadWriter)
 			if !ok {
 				ctx.Warnf("Unable to use Websocket connection")
+				_ = clientConn.Close()
 				return
 			}
 			proxy.proxyWebsocket(ctx, wsConn, clientConn)

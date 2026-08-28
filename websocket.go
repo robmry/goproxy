@@ -51,6 +51,14 @@ func (proxy *ProxyHttpServer) proxyWebsocket(ctx *ProxyCtx, remoteConn io.ReadWr
 		waitChan <- struct{}{}
 	}()
 
-	// Wait until one end closes the connection
+	// Closing both sides after either copy ends guarantees the other copy can
+	// finish before this request releases its connections.
+	<-waitChan
+	if closer, ok := remoteConn.(io.Closer); ok {
+		_ = closer.Close()
+	}
+	if closer, ok := proxyClient.(io.Closer); ok {
+		_ = closer.Close()
+	}
 	<-waitChan
 }

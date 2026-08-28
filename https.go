@@ -540,7 +540,7 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 					resp.ProtoMajor = 1
 					resp.ProtoMinor = 1
 
-					if isWebSocketHandshake(resp.Header) {
+					if resp.StatusCode == http.StatusSwitchingProtocols && isWebSocketHandshake(resp.Header) {
 						ctx.Logf("Response looks like websocket upgrade.")
 
 						// According to resp.Body documentation:
