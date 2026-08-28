@@ -55,6 +55,12 @@ type ProxyHttpServer struct {
 	KeepHeader bool
 	// AllowHTTP2, when true, enables HTTP/2 support in the proxy. Disabled by default.
 	AllowHTTP2 bool
+	// AllowUpgrade optionally authorizes 101 protocol switches. When nil, only
+	// WebSocket switches are relayed for compatibility with previous releases.
+	// When set, it decides every protocol switch, including WebSocket. Use
+	// MatchingUpgrade to accept protocols offered by the client. The response
+	// body is the live upgraded connection and must not be read by the callback.
+	AllowUpgrade func(ctx *ProxyCtx, resp *http.Response) bool
 	// When PreventCanonicalization is true, the header names present in
 	// the request sent through the proxy are directly passed to the destination server,
 	// instead of following the HTTP RFC for their canonicalization.
@@ -135,10 +141,13 @@ func RemoveProxyHeaders(ctx *ProxyCtx, r *http.Request) {
 	//   be communicated by proxies over further connections.
 
 	// We need to keep "Connection: upgrade" header, since it's part of
-	// the WebSocket handshake, and it won't work without it.
+	// an authorized protocol upgrade handshake, and it won't work without it.
 	// For all the other cases (close, keep-alive), we already handle them, by
 	// setting the r.Close variable in the previous lines.
-	if !isWebSocketHandshake(r.Header) {
+	// A nil callback leaves legacy WebSocket Connection headers unchanged.
+	if ctx.Proxy.AllowUpgrade != nil && isUpgradeHandshake(r.Header) {
+		sanitizeUpgradeConnection(r.Header)
+	} else if !isWebSocketHandshake(r.Header) {
 		r.Header.Del("Connection")
 	}
 }

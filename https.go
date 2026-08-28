@@ -520,6 +520,11 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 					resp = proxy.filterResponse(resp, ctx)
 					bodyModified := resp.Body != origBody
 					defer resp.Body.Close()
+					switchProtocol := proxy.shouldProxyUpgrade(ctx, req, resp)
+					if resp.StatusCode == http.StatusSwitchingProtocols && !switchProtocol {
+						httpError(client, ctx, errInvalidProtocolSwitch)
+						return false
+					}
 					if resp.Body != http.NoBody && (bodyModified ||
 						(resp.ContentLength <= 0 && resp.Header.Get("Content-Length") == "")) {
 						// Return chunked encoded response when we don't know the length of the resp, if the body
@@ -540,8 +545,8 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 					resp.ProtoMajor = 1
 					resp.ProtoMinor = 1
 
-					if resp.StatusCode == http.StatusSwitchingProtocols && isWebSocketHandshake(resp.Header) {
-						ctx.Logf("Response looks like websocket upgrade.")
+					if switchProtocol {
+						ctx.Logf("Response switches protocol.")
 
 						// According to resp.Body documentation:
 						// As of Go 1.12, the Body will also implement io.Writer
@@ -566,7 +571,7 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 							ctx.Warnf("Cannot flush response header from mitm'd client: %v", err)
 							return false
 						}
-						proxy.proxyWebsocket(ctx, wsConn, client)
+						proxy.proxyUpgrade(ctx, wsConn, client)
 						return false
 					}
 

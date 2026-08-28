@@ -61,6 +61,12 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 	if origBody != resp.Body {
 		resp.Header.Del("Content-Length")
 	}
+	switchProtocol := proxy.shouldProxyUpgrade(ctx, r, resp)
+	if resp.StatusCode == http.StatusSwitchingProtocols && !switchProtocol {
+		ctx.Warnf("Backend returned an invalid protocol switch")
+		http.Error(w, errInvalidProtocolSwitch.Error(), http.StatusBadGateway)
+		return
+	}
 	copyHeaders(w.Header(), resp.Header, proxy.KeepDestinationHeaders)
 
 	// Announce trailers known at this point (HTTP/1.1 with pre-announced
@@ -78,8 +84,8 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 	}
 	w.WriteHeader(resp.StatusCode)
 
-	if resp.StatusCode == http.StatusSwitchingProtocols && isWebSocketHandshake(resp.Header) {
-		ctx.Logf("Response looks like websocket upgrade.")
+	if switchProtocol {
+		ctx.Logf("Response switches protocol.")
 
 		// We have already written the "101 Switching Protocols" response,
 		// now we hijack the connection to send WebSocket data
@@ -90,7 +96,7 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 				_ = clientConn.Close()
 				return
 			}
-			proxy.proxyWebsocket(ctx, wsConn, clientConn)
+			proxy.proxyUpgrade(ctx, wsConn, clientConn)
 		}
 		return
 	}
