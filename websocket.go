@@ -33,10 +33,21 @@ func headerTokens(header http.Header, name string) []string {
 
 func sanitizeUpgradeConnection(header http.Header) {
 	var kept []string
+	keepHTTP2Settings := false
+	offersH2C := headerContains(header, "Upgrade", "h2c")
 	for _, token := range headerTokens(header, "Connection") {
-		if strings.EqualFold(token, "Upgrade") || strings.EqualFold(token, "HTTP2-Settings") {
+		switch {
+		case strings.EqualFold(token, "Upgrade"):
 			kept = append(kept, token)
+		case strings.EqualFold(token, "HTTP2-Settings") && offersH2C:
+			kept = append(kept, token)
+			keepHTTP2Settings = true
+		default:
+			header.Del(token)
 		}
+	}
+	if !keepHTTP2Settings {
+		header.Del("HTTP2-Settings")
 	}
 	header.Set("Connection", strings.Join(kept, ", "))
 }

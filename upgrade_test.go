@@ -48,10 +48,11 @@ func TestGenericUpgradeOptIn(t *testing.T) {
 			}
 			_, err := fmt.Fprintf(conn, "GET %s HTTP/1.1\r\n"+
 				"Host: %s\r\n"+
-				"Connection: X-Injected, Upgrade\r\n"+
+				"Connection: X-Injected, Upgrade, HTTP2-Settings\r\n"+
 				"Upgrade: websocket\r\n"+
 				"Upgrade: tcp\r\n"+
-				"X-Injected: retained\r\n\r\n", target, backend.Listener.Addr().String())
+				"HTTP2-Settings: remove-me\r\n"+
+				"X-Injected: remove-me\r\n\r\n", target, backend.Listener.Addr().String())
 			require.NoError(t, err)
 			reader := bufio.NewReader(conn)
 			resp, err := http.ReadResponse(reader, nil)
@@ -145,7 +146,7 @@ func TestH2CUpgradePreservesHTTP2SettingsConnectionToken(t *testing.T) {
 		"Connection: X-Injected, Upgrade, HTTP2-Settings\r\n"+
 		"Upgrade: h2c\r\n"+
 		"HTTP2-Settings: AAMAAABkAAQAAP__\r\n"+
-		"X-Injected: retained\r\n\r\n", backend.URL, backend.Listener.Addr().String())
+		"X-Injected: remove-me\r\n\r\n", backend.URL, backend.Listener.Addr().String())
 	require.NoError(t, err)
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	require.NoError(t, err)
@@ -208,8 +209,11 @@ func newUpgradeServer(t *testing.T, protocol string, useTLS bool) *httptest.Serv
 			if got := r.Header.Get("Connection"); !strings.EqualFold(got, "Upgrade") {
 				t.Errorf("connection header = %q, want Upgrade", got)
 			}
-			if got := r.Header.Get("X-Injected"); got != "retained" {
-				t.Errorf("X-Injected header = %q, want retained", got)
+			if got := r.Header.Get("X-Injected"); got != "" {
+				t.Errorf("X-Injected header = %q, want empty", got)
+			}
+			if got := r.Header.Get("HTTP2-Settings"); got != "" {
+				t.Errorf("HTTP2-Settings header = %q, want empty", got)
 			}
 		}
 		conn, rw, err := http.NewResponseController(w).Hijack()
