@@ -63,6 +63,11 @@ func (proxy *ProxyHttpServer) handleHttp(w http.ResponseWriter, r *http.Request)
 	}
 	switchProtocol := proxy.shouldProxyUpgrade(ctx, r, resp)
 	if resp.StatusCode == http.StatusSwitchingProtocols && !switchProtocol {
+		if resp.Body != origBody {
+			if err := resp.Body.Close(); err != nil {
+				ctx.Warnf("Can't close response body %v", err)
+			}
+		}
 		ctx.Warnf("Backend returned an invalid protocol switch")
 		http.Error(w, errInvalidProtocolSwitch.Error(), http.StatusBadGateway)
 		return

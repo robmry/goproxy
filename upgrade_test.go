@@ -157,7 +157,13 @@ func TestH2CUpgradePreservesHTTP2SettingsConnectionToken(t *testing.T) {
 
 func TestGenericUpgradeRequiresOptIn(t *testing.T) {
 	backend := newUpgradeServer(t, "tcp", false)
-	proxyServer := httptest.NewServer(goproxy.NewProxyHttpServer())
+	proxy := goproxy.NewProxyHttpServer()
+	closed := make(chan struct{}, 1)
+	proxy.OnResponse().DoFunc(func(resp *http.Response, _ *goproxy.ProxyCtx) *http.Response {
+		resp.Body = &closeTrackingBody{Reader: resp.Body, closed: closed}
+		return resp
+	})
+	proxyServer := httptest.NewServer(proxy)
 	t.Cleanup(proxyServer.Close)
 	conn := dialProxy(t, proxyServer.URL)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -172,6 +178,24 @@ func TestGenericUpgradeRequiresOptIn(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusBadGateway, resp.StatusCode)
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("filtered response body was not closed")
+	}
+}
+
+type closeTrackingBody struct {
+	io.Reader
+	closed chan<- struct{}
+}
+
+func (b *closeTrackingBody) Close() error {
+	select {
+	case b.closed <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 func TestWebSocketResponseKeepsLegacyBehavior(t *testing.T) {
