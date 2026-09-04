@@ -97,10 +97,13 @@ func (proxy *ProxyHttpServer) hijackConnection(ctx *ProxyCtx, w http.ResponseWri
 	if !ok {
 		panic("httpserver does not support hijacking")
 	}
-	clientConn, _, err := hj.Hijack()
+	clientConn, rw, err := hj.Hijack()
 	if err != nil {
 		ctx.Warnf("Hijack error: %v", err)
 		return nil, err
+	}
+	if rw != nil && rw.Reader != nil {
+		clientConn = &readBufferedConn{Conn: clientConn, r: rw.Reader}
 	}
 	return clientConn, nil
 }

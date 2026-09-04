@@ -52,7 +52,7 @@ func TestGenericUpgradeOptIn(t *testing.T) {
 				"Upgrade: websocket\r\n"+
 				"Upgrade: tcp\r\n"+
 				"HTTP2-Settings: remove-me\r\n"+
-				"X-Injected: remove-me\r\n\r\n", target, backend.Listener.Addr().String())
+				"X-Injected: remove-me\r\n\r\nping", target, backend.Listener.Addr().String())
 			require.NoError(t, err)
 			reader := bufio.NewReader(conn)
 			resp, err := http.ReadResponse(reader, nil)
@@ -60,12 +60,16 @@ func TestGenericUpgradeOptIn(t *testing.T) {
 			require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
 			require.Equal(t, "tcp", resp.Header.Get("Upgrade"))
 
-			_, err = conn.Write([]byte("ping"))
-			require.NoError(t, err)
 			echo := make([]byte, 4)
 			_, err = io.ReadFull(reader, echo)
 			require.NoError(t, err)
 			require.Equal(t, "ping", string(echo))
+
+			_, err = conn.Write([]byte("pong"))
+			require.NoError(t, err)
+			_, err = io.ReadFull(reader, echo)
+			require.NoError(t, err)
+			require.Equal(t, "pong", string(echo))
 		})
 	}
 }

@@ -571,7 +571,7 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 							ctx.Warnf("Cannot flush response header from mitm'd client: %v", err)
 							return false
 						}
-						proxy.proxyUpgrade(ctx, wsConn, client)
+						proxy.proxyUpgrade(ctx, wsConn, &readBufferedConn{Conn: client, r: clientReader.Reader()})
 						return false
 					}
 
